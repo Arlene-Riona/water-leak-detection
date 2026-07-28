@@ -125,9 +125,44 @@ Three concrete reasons, not just general caution:
    autonomous operation over time — not simply more months of consumption
    readings.
 
-## Why no automated test suite exists yet (as of this writing)
+## Why baseline contamination is disclosed as a limitation, not "fixed"
 
-Every validation check in this project was run manually, ad hoc, during
-development. This is a known, explicitly accepted gap for the current
-proof-of-concept scope — not an oversight to be silently assumed away. See
-`08_Future_Work.md`.
+Baseline contamination means: if something real (a leak, or in the
+BATADAL test, an attack) happened during the 8 weeks used as "normal"
+history, that history is no longer clean. This can hide a real problem
+that shows up later, because the comparison point is already skewed.
+
+We tried three different ways to fix or at least detect this problem.
+All three were tested with real numbers, and all three were rejected:
+one made false positives explode from 0% to 87.5%; the other two could
+not reliably tell a contaminated baseline apart from a clean one, even on
+data shaped like a normal, real customer.
+
+We also checked whether this is a solved problem elsewhere. It is not.
+Multiple recent research papers (some from 2025) are still actively
+working on this exact question, and even a well-established, widely used
+industry method (RobustSTL) is documented to struggle with the same kind
+of sustained, multi-hour problem we are dealing with.
+
+Given all of that, disclosing the limitation honestly is the right choice
+today, not pretending it is fixed. The full investigation — every method
+tried, every number, and every literature source — is written up in
+`06_Validation.md` under "External Benchmark: BATADAL Investigation."
+A real fix is left as future work (see `08_Future_Work.md`), needing
+either a more careful method (changepoint detection, not yet built) or
+more data (a machine-learning approach, needs training data we don't
+have yet).
+
+## Automated test suite: built, and what it caught
+
+Earlier in this project, every validation check was run manually, ad hoc,
+during development, with no permanent record. This has since been closed —
+see `tests/`, which has 24 automated tests covering every detection path.
+
+Building the suite immediately found a real bug: `MNF_Applicable` was
+returning `numpy.bool_` instead of a plain Python `bool`, which silently
+breaks JSON export and any `is True`/`is False` comparison downstream. See
+`06_Validation.md` for detail. This is worth remembering as a general
+lesson: a test suite catches a different class of problem (type
+consistency, serialization) than manual accuracy checking does — both are
+needed.
