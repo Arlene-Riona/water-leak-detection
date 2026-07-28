@@ -138,6 +138,25 @@ validation does not.
 
 ## External Benchmark: BATADAL Investigation
 
+> **How to read this section together with the BattLeDIM section further
+> down:** These are two separate real, external tests, and they are meant
+> to be read as a pair, not as two unrelated checks.
+>
+> - **BATADAL** is a cross-domain test (cyber-attacks on network
+>   equipment, not customer leaks) and produced a weak result (Precision
+>   50%, Recall 11%). It is kept here in full, unedited, because it is
+>   what led to discovering and investigating the baseline contamination
+>   problem in the first place. The investigation itself — not just the
+>   final score — is the valuable part of this section.
+> - **BattLeDIM** (see further down) is a same-domain test (real leaks,
+>   on data shaped like a real customer meter) and produced a strong
+>   result (Precision 100%, Recall 71%).
+> - The two misses in the BattLeDIM test independently land on the exact
+>   same kind of weakness this BATADAL section first uncovered:
+>   a contaminated baseline. **Two separate, unrelated, real datasets
+>   finding the same weakness is much stronger evidence than either one
+>   alone.** Neither section should be read, or kept, without the other.
+
 This section covers a real, independent test we ran outside our own data.
 It also covers a deep investigation into why the result was weaker than
 expected, three different fixes we tried, and why none of them were safe
@@ -438,6 +457,160 @@ either more sophisticated engineering (changepoint detection, properly
 tested) or more data (enough confirmed outcomes to train and validate a
 machine learning approach). Both paths are listed in
 `08_Future_Work.md`.
+
+## External Benchmark: BattLeDIM (real leak data)
+
+> See the summary box at the top of the BATADAL section above for how
+> these two external benchmarks fit together — they are meant to be read
+> as a pair.
+
+The BATADAL benchmark above tests something different from what this
+project is built for: cyber-attacks on network equipment, not leaks. This
+section covers a second, separate real-world test using a dataset built
+specifically for leak detection, with data much closer to a real customer
+meter. The full script is `battledim_benchmark.py`, and anyone can run it
+to reproduce these exact numbers.
+
+### What BattLeDIM is
+
+BattLeDIM ("Battle of the Leakage Detection and Isolation Methods") was
+created by the same research group behind BATADAL, specifically to fix
+what BATADAL does not cover. In their own words, it exists because
+BATADAL "focused on the detection of cyber-physical attacks," and they
+wanted a similar public benchmark, but "focusing on leakage events"
+instead. It is described in current research as the standard public
+benchmark used for testing leak detection methods.
+
+We used the 2018 dataset, which includes:
+- **`2018_SCADA.xlsx`**, sheet "Demands (L_h)": 82 individually monitored
+  customer/junction water demand readings, every 5 minutes, for the whole
+  year. This behaves like real customer water use — a number that rises
+  and falls smoothly through the day — not like BATADAL's on/off valve
+  signal.
+- **`2018_Leakages.csv`**: the actual leak flow rate, in cubic meters per
+  hour, for 14 different pipes, every 5 minutes, for the whole year. This
+  is real, independently created ground truth, more precise than
+  BATADAL's simple yes/no attack flag.
+- **`2018_Fixed_Leakages_Report.txt`**: the official repair times for 10
+  of the 14 leaks. We used this only to double check our own numbers. All
+  10 repair times we calculated from the leak flow data matched this
+  report exactly.
+
+### An important design step: finding which node actually shows each leak
+
+A pipe leak in this network does not raise water use everywhere at once.
+It shows up as a large, sudden rise at the one or few customer nodes
+closest to that pipe, not across the whole network. Our first attempt at
+checking this compared a long "before" window against a long "after"
+window, and found what looked like a leak signal at almost every single
+node, all rising by a similar amount. This turned out to be misleading:
+it was picking up the ordinary seasonal rise in water use from January to
+April, the same kind of thing described earlier in this document under
+"Ramadan/Eid" and other seasonal effects, not the leak itself.
+
+Once we used a **tight** window (3 days right before the leak started, 3
+days right after) instead of a long one, the seasonal noise disappeared
+and a real, sharp, single-node signal appeared clearly. For example, for
+the leak on pipe `p461`, node `n1`'s reading jumped from about 273 L/h to
+632 L/h (a 131% rise) right when the leak started, while almost every
+other node stayed flat. This is the correct way to find which node
+belongs to which leak, and it is the method the actual benchmark script
+uses.
+
+### Building a fair, honest test set
+
+Out of 14 total leaks, only some could be used as a fair test, for two
+plain reasons:
+
+1. **Not every leak showed up clearly on a monitored node.** Only 82 of
+   about 10,000 simulated customers in this network are individually
+   monitored, so a leak on a pipe far from any of those 82 points may not
+   show up in our data at all. 3 leaks (`p158`, `p427`, `p654`) showed
+   under 10% change on their best-matching node — too weak to count as a
+   real match, so they were left out rather than forced in.
+2. **Some leaks happened too early in the year to have 12 weeks of prior
+   history.** Our system needs 8 weeks of "normal" history plus a 4-week
+   check window, and the dataset only starts January 1, 2018. 4 leaks
+   (`p232`, `p257`, `p461`, `p673`) did not have enough history before
+   them within the dataset to build a fair baseline, so they were also
+   left out.
+
+This left **7 usable, real test cases**, plus **20 negative control
+cases**: 5 nodes that never showed a meaningful response to any leak in
+our scans, each checked at 4 different points spread across the year.
+
+We also checked, the same way as for BATADAL, whether each of the 7
+usable cases had a clean 12-week history, or whether a *different* leak
+on the same node had already contaminated it:
+
+| Leak | Node | Baseline contaminated by |
+|---|---|---|
+| `p31` | `n1` | none (clean) |
+| `p183` | `n347` | `p257` |
+| `p369` | `n1` | `p31` |
+| `p538` | `n25` | none (clean) |
+| `p628` | `n25` | none (clean) |
+| `p810` | `n347` | `p257` |
+| `p866` | `n25` | `p628` |
+
+One extra finding worth stating on its own: node `n347` is affected by
+two leaks (`p257` and `p810`) that were **never repaired within all of
+2018** — they simply keep running to the end of the dataset. This means
+`n347` has almost no genuinely clean period anywhere in the whole year.
+
+### The real results
+
+|  | Predicted YES | Predicted NO |
+|---|---|---|
+| **Real leak was there** | 5 (True Positive) | 2 (False Negative) |
+| **Nothing was actually wrong** | 0 (False Positive) | 20 (True Negative) |
+
+- **Precision: 100%** — every single time we flagged something, it was a
+  real leak. Zero false alarms across 20 clean test cases.
+- **Recall: 71%** — we caught 5 of the 7 real leaks in our test set.
+- **F1 score: 0.83**
+- **False Positive Rate: 0%**
+
+This is a much stronger, more directly relevant result than the BATADAL
+numbers, because this dataset is testing leak detection specifically, on
+data shaped like a real customer meter.
+
+### The 2 misses confirm the contamination finding again, on a second dataset
+
+Both misses — `p183` and `p810` — are on the same node, `n347`, the one we
+already flagged as having almost no clean period all year. The other two
+contaminated cases (`p369`, `p866`) were still caught correctly. Put as a
+simple comparison: **0 of 3 clean-baseline cases were missed, but 2 of 4
+contaminated-baseline cases were missed.** Contamination clearly raises
+the chance of a miss here, without being an automatic guarantee of one.
+
+This matters because it is the **second, completely separate real dataset**
+that lands on the same conclusion as the BATADAL investigation: baseline
+contamination is a real, recurring weak point, not something specific to
+one dataset's quirks. It adds real weight to everything written in the
+BATADAL section above and in `07_Design_Decisions.md`.
+
+### Honest limits of this test
+
+- This is still a simulated network (built with modelling software, not
+  real physical pipes), and only 82 of roughly 10,000 simulated customers
+  are individually monitored, so most of the network's leaks could not be
+  tested this way at all.
+- 7 real test cases is a small sample. A couple of different or
+  additional test cases could change these exact percentages.
+- All negative controls come from nodes we picked because they looked
+  quiet in our own scan, not from an independent, unrelated source. This
+  is a reasonable, honest choice given what data exists, but it is worth
+  stating plainly rather than leaving unsaid.
+
+Even with those limits, this result is real evidence, not synthetic data
+we generated ourselves, and it is testing the actual problem this project
+exists to solve. Combined with the extensive synthetic testing earlier in
+this document and the BATADAL cross-domain check, this gives a
+three-layer, mutually supporting picture: controlled synthetic tests to
+isolate and fix individual bugs, a cross-domain real dataset (BATADAL) to
+check the underlying math generalizes at all, and a same-domain real
+dataset (BattLeDIM) to check it directly on the actual problem.
 
 ## Known validation gaps
 
