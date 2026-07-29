@@ -10,6 +10,56 @@ leaks.
 > result is meant to be reviewed by a person before any action is taken.
 > See [`docs/07_Design_Decisions.md`](docs/07_Design_Decisions.md) for why.
 
+## Project summary
+
+Water utilities need a way to flag customers who might have a leak, using
+only what most of them already collect: hourly consumption readings per
+customer. There's no pressure data, no network sensors, and — at the
+start of this project — no confirmed list of which customers actually had
+real leaks. That last point shaped almost every decision below: without
+labeled outcomes, a machine-learning model has nothing to learn from, so
+this project is built as a transparent, rule-based statistical system
+instead — one where every flag traces back to a specific, readable reason,
+not a black-box score.
+
+The system evolved in stages, each one built to fix a specific, real
+weakness found by testing the previous version, not by guesswork:
+
+1. **Minimum Night Flow (MNF)** — the industry-standard technique: a real
+   leak runs 24 hours a day, so if a customer's quietest hour has gotten
+   noticeably higher, that's a strong signal. Extended with *adaptive
+   trough discovery* (for customers whose real quiet period doesn't match
+   their category's assumed hours) and *intermittent leak detection* (for
+   leaks that cycle on and off instead of running continuously).
+2. **Mann-Kendall trend detection** — a fallback for accounts with no
+   reliable quiet period at all (e.g. 24/7 operations), using a proper
+   statistical trend test instead of assuming a night trough exists.
+3. **Dual burst detection** — catches both a sudden spike held for several
+   straight hours, and a fluctuating burst that dips in and out of the
+   anomaly threshold instead of holding steady.
+4. **Seasonal/calendar awareness** — a real incident during testing (an
+   entire portfolio of Commercial customers got flagged at once) revealed
+   that shared events like Ramadan can fool every detection path at once.
+   Fixed with a rule-based calendar of known high-variance periods, plus a
+   deeper, mechanism-specific fix for Ramadan itself (which uniquely
+   shifts *when* people are active, not just *how much* they use).
+5. **Priority scoring, not a risk percentage** — every flag gets a 0–100
+   suspicion score built from which signals fired, explicitly *not*
+   labeled as a calibrated probability, since there's no confirmed-outcome
+   data yet to validate a real percentage against.
+6. **Peer/cohort comparison** — the most general fix: compares a flagged
+   customer against their category peers in the same run, so a shared,
+   non-leak cause (known or unknown, not just the ones on the calendar)
+   gets caught too, without ever suppressing a genuine outlier riding on
+   top of it.
+
+Every one of these was tested empirically before being trusted, and at
+least two proposed improvements along the way were tried, found to make
+things measurably worse, and rejected — see
+[`docs/06_Validation.md`](docs/06_Validation.md) and
+[`docs/07_Design_Decisions.md`](docs/07_Design_Decisions.md) for the full,
+honest record of what worked, what didn't, and why.
+
 ## What it does
 
 Given hourly `(timestamp, consumption)` readings per customer, organized by
@@ -31,6 +81,28 @@ the pipeline:
    probability) with a plain-language explanation of exactly why each
    customer was flagged.
 
+## How well does it work
+
+Three layers of testing, each telling us something the others can't:
+
+| Test | What it's for | Result |
+|---|---|---|
+| Synthetic data (many scenarios) | Isolate and fix individual bugs under controlled conditions | 0% false positives across every detection path, after fixes; every bug found this way is documented in `06_Validation.md` |
+| **BATADAL** (real, external, cross-domain — network cyber-attacks, not leaks) | Check whether the underlying math generalizes to a real, independently-labeled signal at all | Weak (Precision 50%, Recall 11%) — but this is *why* the baseline-contamination weakness was found and investigated in the first place |
+| **BattLeDIM** (real, external, same-domain — actual pipe leaks, customer-shaped meter data) | Check the system on the real problem it's built for | Strong: **Precision 100%, Recall 71%, F1 0.83, 0% false positives**, on 27 real test cases |
+
+The two BattLeDIM misses land on the exact same weakness BATADAL first
+revealed — two independent, real datasets confirming the same limitation
+is much stronger evidence than either alone. Full methodology, every
+number, and the literature backing the conclusions: see
+[`docs/06_Validation.md`](docs/06_Validation.md).
+
+**Important caveat:** all of the above is either synthetic or from public
+benchmark datasets (simulated water networks). None of it is validation
+against your own real customers' confirmed leak/no-leak outcomes — that
+still needs to happen before treating any of these numbers as production
+accuracy. See "What's still needed" below.
+
 ## Quick start
 
 ```bash
@@ -47,6 +119,17 @@ notebooks/leak_detection.ipynb
 
 Full setup instructions: [`docs/04_Installation.md`](docs/04_Installation.md)
 
+To reproduce the external validation results yourself:
+```bash
+python notebooks/benchmarking/batadal_benchmark.py
+python notebooks/benchmarking/battledim_benchmark.py
+```
+
+To run the automated test suite:
+```bash
+pytest tests/
+```
+
 ## Repository structure
 
 ```
@@ -56,12 +139,12 @@ water-leak-detection/
 ├── notebooks/
 │   ├── leak_detection.ipynb    Main pipeline notebook
 │   ├── exploratory/             Early exploratory analysis (partial EDA)
-│   └── benchmarking/            Synthetic data generation + benchmark tests
+│   └── benchmarking/            Benchmark scripts + synthetic data generation
 ├── data/
-│   └── benchmarking/            Synthetic/benchmark datasets only
-├── archive/                Recent superseded versions, kept for rollback
+│   └── benchmarking/            Synthetic + public benchmark datasets only
+├── archive/                Superseded notebook versions, kept for rollback
 ├── results/                 Generated output (gitignored)
-├── tests/                    (planned — see docs/08_Future_Work.md)
+├── tests/                    24 automated tests — see tests/README.md
 ├── requirements.txt
 └── .gitignore
 ```
@@ -80,26 +163,37 @@ identifiable information. See `.gitignore` and
 | [`03_Data_Requirements.md`](docs/03_Data_Requirements.md) | Required columns, folder structure, minimum data footprint |
 | [`04_Installation.md`](docs/04_Installation.md) | Setup and how to run |
 | [`05_User_Guide.md`](docs/05_User_Guide.md) | How to read the output, what a flag does and doesn't mean |
-| [`06_Validation.md`](docs/06_Validation.md) | All tested false-positive/true-positive numbers, and the real-data incident that shaped seasonal handling |
+| [`06_Validation.md`](docs/06_Validation.md) | All tested numbers — synthetic, BATADAL, BattLeDIM — and the real-data incident that shaped seasonal handling |
 | [`07_Design_Decisions.md`](docs/07_Design_Decisions.md) | Why MNF over ML, why Mann-Kendall over CUSUM, why peer comparison only boosts, and other tradeoffs |
 | [`08_Future_Work.md`](docs/08_Future_Work.md) | What's blocked on more data vs. what's just unbuilt architecture |
 
-## Current status
+## Current status and what's still needed
 
 This is a **validated proof-of-concept for the detection logic and
-architecture**, not a production-hardened system. Specifically:
+architecture**, not a production-hardened system. What's genuinely solid,
+and what's genuinely still missing:
 
-- All validation to date uses **synthetic data**; no confirmed real-world
-  leak/no-leak outcomes exist yet to calibrate against.
-- All thresholds are hand-set engineering judgment, not fitted to outcomes.
-- Not yet hardened against real-world data issues (negative readings, DST
-  transitions, duplicate meters, inconsistent units).
-- No automated regression test suite exists yet.
+**Solid:**
+- Every detection path is tested — synthetically, and against two real,
+  independent external datasets (see "How well does it work" above).
+- A 24-test automated regression suite (`tests/`) catches regressions
+  automatically, including a real type-consistency bug found on its first
+  run (see `06_Validation.md`).
+- Known weaknesses are disclosed in the output itself (e.g.
+  `Seasonal_Confound_Recent`, `MNF_Applicable`), not hidden.
 
-None of this blocks using it as a **decision-support tool with human
-review** — which is its intended use today. See
-[`08_Future_Work.md`](docs/08_Future_Work.md) for the concrete path from
-here to something closer to production-ready.
+**Still missing, split by what actually unblocks each one:**
+
+| Needs more data (not more code) | Needs more engineering (buildable now, not yet built) |
+|---|---|
+| Validation against *your own* customers' confirmed outcomes | Extending the deep Ramadan-style fix to other seasonal confounds |
+| Learned/calibrated thresholds (currently hand-set) | Routing the burst-detection paths through the same seasonal logic MNF already has |
+| A real calibrated risk probability, replacing the priority score | Hardening against messy real-world data (negative readings, DST transitions, duplicate meters, inconsistent units) |
+| A machine-learning fix for baseline contamination (proven genuinely hard — see `06_Validation.md`) | Changepoint detection as a more principled contamination approach (researched, not yet built) |
+
+None of this blocks using the system as a **decision-support tool with
+human review** — which is its intended use today. Full detail and
+priority order: [`08_Future_Work.md`](docs/08_Future_Work.md).
 
 ## Data privacy
 
