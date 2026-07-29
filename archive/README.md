@@ -1,39 +1,51 @@
 # Archive
 
-This folder holds early, superseded versions of the main detection
-notebook — kept as a historical record of how the project started, not as
-a "most recent backups" folder. The current, canonical version lives at
+This folder holds every superseded version of the main detection notebook,
+from the original starting point through the last version before the
+current one. The current, canonical version lives at
 `notebooks/leak_detection.ipynb` (originally `v7`).
 
 Full version history is also tracked in git commits (see the repo's commit
-log). This folder is a convenience layer on top of that — instant file
-access without needing git commands — not a replacement for it.
+log) once this repo is actually committed to. This folder is a convenience
+layer on top of that — instant file access without needing git commands —
+not a replacement for it.
 
-## What's actually in here, and why these two specifically
+## What's in here
 
-The two files kept here are the **earliest** versions of the project, not
-the most recent ones:
+Each major logic improvement during development resulted in a new
+notebook rather than an edit to the existing one, which is why this many
+versioned files exist. Individual changes between each version were not
+tracked in detail at the time, so the files below are kept as broad
+historical snapshots, not a changelog:
 
-- `generic_leak_detection_for_all_customers.ipynb` — the original,
-  unversioned starting point.
-- `v2_generic_leak_detection_for_all_customers.ipynb` — the first
-  numbered iteration after that.
+- `generic_leak_detection_for_all_customers.ipynb`
+- `v2_generic_leak_detection_for_all_customers.ipynb`
+- `v3_generic_leak_detection_for_all_customers.ipynb`
+- `v4_generic_leak_detection_for_all_customers.ipynb`
+- `v5_generic_leak_detection_for_all_customers.ipynb`
+- `v6_generic_leak_detection_for_all_customers.ipynb`
 
-Everything between `v2` and the current `v7` (including `v3`) was not
-carried into this repository — only these two oldest versions were kept,
-specifically because they're useful as a "before" reference: comparing
-either of these against `notebooks/leak_detection.ipynb` shows the full
-distance the detection logic traveled, from a flat, single-threshold rule
-set to the current multi-signal, seasonally-aware, peer-compared system
-(see [`../docs/07_Design_Decisions.md`](../docs/07_Design_Decisions.md)
-for why each later change was made). Git history is the record for
-anything else in between.
+All six have had their outputs cleared and been scrubbed for customer
+names/identifiers (see below for the process used).
 
-## Before adding or updating anything in this folder
+For reference, the canonical version (`v7` → `notebooks/leak_detection.ipynb`)
+includes: per-customer Minimum Night Flow (fixed + adaptive trough
+discovery) with intermittent/duty-cycled leak detection, Mann-Kendall trend
+detection as a fallback for accounts with no reliable quiet period, dual
+burst detection (strict consecutive + retuned cumulative/fluctuating),
+rule-based seasonal confound handling with Ramadan-specific mechanism fixes,
+a priority score with full explainability, and portfolio-level peer/cohort
+comparison — none of which exists in the earlier archived files here. See
+[`../docs/07_Design_Decisions.md`](../docs/07_Design_Decisions.md) for the
+reasoning behind each of these additions, and comparing any archived file
+against `v7` shows the full distance the logic traveled from a flat,
+single-threshold rule set to the current system.
 
-These notebooks were run against real customer data at various points.
-Before any file goes in here (or is updated), the same rule applies as
-everywhere else in this repo:
+## Before adding anything new to this folder
+
+These notebooks were run against real customer data at various points. If
+any file is ever added or updated here in future, apply the same rule
+used for everything already in this folder:
 
 1. **Clear all cell outputs:**
    ```bash
@@ -45,29 +57,3 @@ everywhere else in this repo:
    grep -rn "LLC\|Villa\|Trading\|Al \|Hotel\|Estate" archive/
    ```
    Check every hit manually before committing.
-
-## Versions kept
-
-Each major logic improvement during development resulted in a new
-notebook rather than an edit to the existing one, which is why several
-versioned files existed before this repo was cleaned up (see
-[`../README.md`](../README.md) for the current, single canonical
-notebook going forward). Individual changes between each version were not
-tracked in detail at the time, so the two files below are kept as broad
-historical snapshots, not a changelog:
-
-| File | Verified clean? |
-|---|---|
-| `generic_leak_detection_for_all_customers.ipynb` | ☐ |
-| `v2_generic_leak_detection_for_all_customers.ipynb` | ☐ |
-
-For reference, the canonical version (`v7` → `notebooks/leak_detection.ipynb`)
-includes: per-customer Minimum Night Flow (fixed + adaptive trough
-discovery) with intermittent/duty-cycled leak detection, Mann-Kendall trend
-detection as a fallback for accounts with no reliable quiet period, dual
-burst detection (strict consecutive + retuned cumulative/fluctuating),
-rule-based seasonal confound handling with Ramadan-specific mechanism fixes,
-a priority score with full explainability, and portfolio-level peer/cohort
-comparison — none of which exists in either archived file here. See
-[`../docs/07_Design_Decisions.md`](../docs/07_Design_Decisions.md) for the
-reasoning behind each of these additions.

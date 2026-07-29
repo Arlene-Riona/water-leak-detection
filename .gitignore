@@ -6,13 +6,6 @@ TopConsumerCommercialAllCustomers.xlsx
 results/
 portfolio_leakage_audit_summary*.csv
 
-# Old/duplicate versions kept locally only, not in git
-previousVersionsOfMainCode/
-v3_generic_leak_detection_for_all_customers.ipynb
-v4_generic_leak_detection_for_all_customers.ipynb
-v5_generic_leak_detection_for_all_customers.ipynb
-v6_generic_leak_detection_for_all_customers.ipynb
-
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
