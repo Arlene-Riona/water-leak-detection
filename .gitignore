@@ -1,11 +1,20 @@
 # Real customer data -- never commit
 customers/
 TopConsumerCommercialAllCustomers.xlsx
+# Customer data
+data/customers/*
+!data/customers/.gitkeep
+
+# Consumption data
+data/consumption/*
+!data/consumption/.gitkeep
+
+# SQLite database
+database/water_utility.db
 
 # Generated outputs -- regenerated on every run, not source
 results/
 portfolio_leakage_audit_summary*.csv
-
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

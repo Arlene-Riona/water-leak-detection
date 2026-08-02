@@ -16,22 +16,21 @@ def create_database():
     """Create the SQLite database using schema.sql."""
 
     # Project root
-    project_root = Path(__file__).resolve().parent.parent
+    from config import SCHEMA_PATH
 
-    schema_path = project_root / "database" / "schema.sql"
 
     print("=" * 60)
     print("Water Leakage Detection Database")
     print("=" * 60)
 
-    print(f"\nSchema : {schema_path}")
+    print(f"Schema   : {SCHEMA_PATH}")
     print(f"Database : {DATABASE_PATH}")
 
     # Create database connection
     connection = get_connection()
 
     try:
-        with open(schema_path, "r", encoding="utf-8") as sql_file:
+        with open(SCHEMA_PATH, "r", encoding="utf-8") as sql_file:
             schema = sql_file.read()
 
         connection.executescript(schema)

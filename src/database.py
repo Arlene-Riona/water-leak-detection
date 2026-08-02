@@ -11,8 +11,7 @@ from pathlib import Path
 import sqlite3
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATABASE_PATH = PROJECT_ROOT / "database" / "water_utility.db"
+from config import DATABASE_PATH
 
 
 def get_connection():
