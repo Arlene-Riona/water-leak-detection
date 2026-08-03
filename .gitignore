@@ -11,6 +11,17 @@ data/consumption/*
 
 # SQLite database
 database/water_utility.db
+# SQLite database
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
 
 # Generated outputs -- regenerated on every run, not source
 results/
