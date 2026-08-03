@@ -31,6 +31,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 
 CUSTOMER_DATA_DIR = DATA_DIR / "customers"
 CONSUMPTION_DATA_DIR = DATA_DIR / "consumption"
+CUSTOMER_MASTER_FILE = CUSTOMER_DATA_DIR / "Top Consumer.xlsx"
 
 # ============================================================================
 # RESULTS
