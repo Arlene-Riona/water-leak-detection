@@ -17,7 +17,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS Customers (
     KM_Number               TEXT PRIMARY KEY,
     Name                    TEXT NOT NULL,
-    Zone                    TEXT NOT NULL,
+    Zone                    TEXT,
     Category                TEXT NOT NULL,
 
     EstimatedRevenueQAR     REAL,
