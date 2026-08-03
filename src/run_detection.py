@@ -4,202 +4,345 @@ Runs the complete leak detection pipeline.
 Workflow
 --------
 1. Read all customers from the database.
-2. Locate each customer's consumption dataset.
-3. Run the leak detection engine.
-4. Store results in detection_results.
+2. Load hourly consumption from SQLite.
+3. Execute leak detection.
+4. Save current detection results.
+5. Save historical detection record.
+6. Record algorithm run summary.
 
 Author: Arlene
 """
 
-from pathlib import Path
-import sqlite3
+import time
+
+import pandas as pd
 
 from database import get_connection
-from config import RAW_DATA_FOLDER
 from leak_detection_database import run_customer_detection
 
-def get_all_customers(connection):
-    """
-    Retrieve every customer stored in the database.
-    """
 
-    cursor = connection.cursor()
-
-    cursor.execute("""
-        SELECT
-            customer_id,
-            customer_name,
-            category
-        FROM customers
-        ORDER BY customer_id
-    """)
-
-    return cursor.fetchall()
+# =============================================================================
+# DATABASE HELPERS
+# =============================================================================
 
 def get_all_customers(connection):
     """
-    Retrieve every customer stored in the database.
+    Retrieve all customers stored in the database.
     """
 
-    cursor = connection.cursor()
-
-    cursor.execute("""
-        SELECT
-            customer_id,
-            customer_name,
-            category
-        FROM customers
-        ORDER BY customer_id
-    """)
-
-    return cursor.fetchall()
-
-def find_consumption_file(customer_id):
-    """
-    Search for the customer's consumption dataset.
+    query = """
+    SELECT
+        KM_Number,
+        Name,
+        Category
+    FROM Customers
+    ORDER BY KM_Number
     """
 
-    customer_id = str(customer_id)
+    return pd.read_sql_query(query, connection)
 
-    for file in RAW_DATA_FOLDER.rglob("*"):
 
-        if not file.is_file():
-            continue
+def load_customer_consumption(connection, customer_id):
+    """
+    Load one customer's hourly consumption history.
+    """
 
-        if file.suffix.lower() not in [".xlsx", ".xls", ".csv"]:
-            continue
+    query = """
+    SELECT
+        Timestamp,
+        ConsumptionM3
+    FROM HourlyConsumption
+    WHERE KM_Number = ?
+    ORDER BY Timestamp
+    """
 
-        if customer_id in file.stem:
-            return file
+    df = pd.read_sql_query(
+        query,
+        connection,
+        params=(customer_id,)
+    )
 
-    return None
+    df["Timestamp"] = pd.to_datetime(df["Timestamp"])
+
+    return df
+
+# =============================================================================
+# SAVE CURRENT RESULT
+# =============================================================================
 
 def save_detection_result(connection, result):
     """
-    Store one detection result.
+    Update the latest detection result for one customer.
     """
 
     cursor = connection.cursor()
 
     cursor.execute(
         """
-        INSERT INTO detection_results (
+        INSERT OR REPLACE INTO DetectionResults (
 
-            customer_id,
-            status,
-            leak_suspected,
-            priority_score,
-            priority_tier,
-            priority_reasons,
-            details,
-            historical_night_floor,
-            recent_night_floor,
-            mnf_applicable,
-            trough_detection_method,
-            mk_p_value,
-            data_completeness_recent,
-            detection_timestamp
+            KM_Number,
+            DetectionStatus,
+            LeakType,
+            PriorityScore,
+            PriorityLevel,
+            HistoricalNightFloor,
+            RecentNightFloor,
+            NightTroughRatio,
+            MK_PValue,
+            MK_SenSlope,
+            PeakZScore,
+            Evidence,
+            DataCompleteness,
+            EstimatedWaterLoss,
+            EstimatedRevenueLoss,
+            Recommendation,
+            AISummary,
+            FirstDetected,
+            LastDetected
 
         )
 
         VALUES (
 
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 
         )
         """,
         (
-            result["Customer_ID"],
-            result["Status"],
-            result["Leak_Suspected"],
-            result["Priority_Score"],
-            result["Priority_Tier"],
-            result["Priority_Reasons"],
-            result["Details"],
-            result["Historical_Night_Floor_m3"],
-            result["Recent_Night_Floor_m3"],
-            result["MNF_Applicable"],
-            result["Trough_Detection_Method"],
-            result["MK_P_Value"],
-            result["Data_Completeness_Recent"],
-        )
+            result["KM_Number"],
+            result["DetectionStatus"],
+            result["LeakType"],
+            result["PriorityScore"],
+            result["PriorityLevel"],
+            result["HistoricalNightFloor"],
+            result["RecentNightFloor"],
+            result["NightTroughRatio"],
+            result["MK_PValue"],
+            result["MK_SenSlope"],
+            result["PeakZScore"],
+            result["Evidence"],
+            result["DataCompleteness"],
+            result["EstimatedWaterLoss"],
+            result["EstimatedRevenueLoss"],
+            result["Recommendation"],
+            result["AISummary"],
+            result["FirstDetected"],
+            result["LastDetected"],
+        ),
     )
 
-    connection.commit()
+# =============================================================================
+# SAVE CURRENT HISTORY
+# =============================================================================
+
+def save_detection_history(connection, run_id, result):
+
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO DetectionHistory (
+
+            RunID,
+            KM_Number,
+            DetectionStatus,
+            LeakType,
+            PriorityScore,
+            HistoricalNightFloor,
+            RecentNightFloor,
+            NightTroughRatio,
+            MK_PValue,
+            MK_SenSlope,
+            PeakZScore,
+            Evidence,
+            EstimatedWaterLoss,
+            EstimatedRevenueLoss,
+            Recommendation
+
+        )
+
+        VALUES (
+
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+
+        )
+        """,
+        (
+            run_id,
+            result["KM_Number"],
+            result["DetectionStatus"],
+            result["LeakType"],
+            result["PriorityScore"],
+            result["HistoricalNightFloor"],
+            result["RecentNightFloor"],
+            result["NightTroughRatio"],
+            result["MK_PValue"],
+            result["MK_SenSlope"],
+            result["PeakZScore"],
+            result["Evidence"],
+            result["EstimatedWaterLoss"],
+            result["EstimatedRevenueLoss"],
+            result["Recommendation"],
+        ),
+    )
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 def main():
-    """
-    Execute the complete leak detection pipeline.
-    """
 
     print("=" * 60)
     print("Water Leakage Detection Pipeline")
     print("=" * 60)
 
+    start = time.time()
+
     connection = get_connection()
+
     cursor = connection.cursor()
-    cursor.execute("DELETE FROM detection_results")
+
+    cursor.execute(
+    """
+    INSERT INTO AlgorithmRuns (
+
+        CustomersProcessed,
+        LeaksDetected,
+        RuntimeSeconds,
+        Status
+
+    )
+
+    VALUES (?, ?, ?, ?)
+    """,
+    (
+        0,
+        0,
+        0,
+        "RUNNING"
+    )
+)
+
+    run_id = cursor.lastrowid
+
     connection.commit()
+
+    customers_processed = 0
+    leaks_detected = 0
 
     try:
 
         customers = get_all_customers(connection)
 
-        print(f"\nCustomers found : {len(customers)}")
+        print(f"\nCustomers Found : {len(customers)}")
 
-        processed = 0
-        leaks_found = 0
-        missing_files = 0
+        for _, customer in customers.iterrows():
 
-        for customer in customers:
+            customer_id = customer["KM_Number"]
 
-            customer_id = customer["customer_id"]
-            customer_name = customer["customer_name"]
-            category = customer["category"]
+            print(f"\nProcessing {customer_id}")
 
-            print(f"\nProcessing Customer {customer_id}")
+            df = load_customer_consumption(
+                connection,
+                customer_id
+            )
 
-            consumption_file = find_consumption_file(customer_id)
+            if df.empty:
 
-            if consumption_file is None:
-
-                print("Consumption file not found.")
-
-                missing_files += 1
+                print("No consumption data. Skipping.")
                 continue
 
-            print(f"Found: {consumption_file.name}")
-
-            results = run_customer_detection(
+            result = run_customer_detection(
                 customer_id=customer_id,
-                category=category,
-                consumption_file=consumption_file
+                category=customer["Category"],
+                consumption_df=df
             )
 
             save_detection_result(
                 connection,
-                results
+                result
             )
 
-            processed += 1
+            save_detection_history(
+                connection,
+                run_id,
+                result
+            )
 
-            if results["Leak_Suspected"] == "YES":
-                leaks_found += 1
+            connection.commit()
+
+            customers_processed += 1
+
+            if result["DetectionStatus"] == "Leak Detected":
+                leaks_detected += 1
 
             print(
-                f"Finished ({results['Leak_Suspected']})"
+                f"Finished -> {result['DetectionStatus']}"
             )
+
+        runtime = time.time() - start
+
+        cursor.execute(
+        """
+        UPDATE AlgorithmRuns
+        SET
+            CustomersProcessed = ?,
+            LeaksDetected = ?,
+            RuntimeSeconds = ?,
+            Status = ?
+        WHERE RunID = ?
+        """,
+        (
+            customers_processed,
+            leaks_detected,
+            runtime,
+            "SUCCESS",
+            run_id,
+        ),
+    )
+
+        connection.commit()
 
         print("\n" + "=" * 60)
         print("Pipeline Summary")
         print("=" * 60)
 
-        print(f"Customers           : {len(customers)}")
-        print(f"Processed           : {processed}")
-        print(f"Leaks Found         : {leaks_found}")
-        print(f"Missing Files       : {missing_files}")
+        print(f"Customers Processed : {customers_processed}")
+        print(f"Leaks Detected      : {leaks_detected}")
+        print(f"Runtime             : {runtime:.2f} sec")
 
         print("\nPipeline completed successfully.")
+
+    except Exception as e:
+
+        runtime = time.time() - start
+
+        cursor.execute(
+        """
+        UPDATE AlgorithmRuns
+        SET
+            CustomersProcessed = ?,
+            LeaksDetected = ?,
+            RuntimeSeconds = ?,
+            Status = ?,
+            ErrorMessage = ?
+        WHERE RunID = ?
+        """,
+        (
+            customers_processed,
+            leaks_detected,
+            runtime,
+            "FAILED",
+            str(e),
+            run_id,
+        ),
+    )
+
+        connection.commit()
+
+        raise
 
     finally:
 
@@ -207,5 +350,6 @@ def main():
 
         print("Database connection closed.")
 
+
 if __name__ == "__main__":
-    main()    
+    main()
