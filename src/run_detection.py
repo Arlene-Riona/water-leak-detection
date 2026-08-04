@@ -77,6 +77,26 @@ def save_detection_result(connection, result):
 
     cursor = connection.cursor()
 
+    # -------------------------------------------------------------------------
+    # Preserve FirstDetected across pipeline runs
+    # -------------------------------------------------------------------------
+
+    cursor.execute(
+        """
+        SELECT FirstDetected
+        FROM DetectionResults
+        WHERE KM_Number = ?
+        """,
+        (result["KM_Number"],)
+    )
+
+    existing = cursor.fetchone()
+
+    if existing and existing[0] is not None:
+        first_detected = existing[0]
+    else:
+        first_detected = result["LastDetected"]
+
     cursor.execute(
         """
         INSERT OR REPLACE INTO DetectionResults (
@@ -127,7 +147,7 @@ def save_detection_result(connection, result):
             result["EstimatedRevenueLoss"],
             result["Recommendation"],
             result["AISummary"],
-            result["FirstDetected"],
+            first_detected,
             result["LastDetected"],
         ),
     )

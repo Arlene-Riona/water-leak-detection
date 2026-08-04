@@ -8,11 +8,23 @@ the validated algorithm.
 Author: Arlene
 """
 
-import tempfile
-from pathlib import Path
+from datetime import datetime
 
 from leak_detection_pipeline import analyze_leak_production_grade
 
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
+
+# Placeholder tariff for the proof-of-concept.
+# Replace with the official Kahramaa tariff if available.
+WATER_TARIFF_QAR_PER_M3 = 4.5
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 def run_customer_detection(customer_id, category, consumption_df):
 
@@ -20,6 +32,41 @@ def run_customer_detection(customer_id, category, consumption_df):
         consumption_df=consumption_df,
         folder_type=category
     )
+
+    # -------------------------------------------------------------------------
+    # Estimated Daily Water Loss
+    #
+    # Uses the increase in Minimum Night Flow (MNF) as an estimate of
+    # continuous leakage.
+    #
+    # Estimated Daily Water Loss =
+    # (Recent Night Floor - Historical Night Floor) × 24 hours
+    # -------------------------------------------------------------------------
+
+    historical_night_floor = raw["Historical_Night_Floor_m3"]
+    recent_night_floor = raw["Recent_Night_Floor_m3"]
+
+    if (
+        historical_night_floor is not None
+        and recent_night_floor is not None
+    ):
+
+        estimated_water_loss = max(
+            0,
+            recent_night_floor - historical_night_floor
+        ) * 24
+
+        estimated_revenue_loss = (
+            estimated_water_loss *
+            WATER_TARIFF_QAR_PER_M3
+        )
+
+    else:
+
+        estimated_water_loss = None
+        estimated_revenue_loss = None
+
+    current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     result = {
 
@@ -30,17 +77,20 @@ def run_customer_detection(customer_id, category, consumption_df):
             if raw["Leak_Suspected"] == "YES"
             else "Normal",
 
-        "LeakType": raw["Priority_Reasons"],
+        "LeakType":
+            raw["Priority_Reasons"],
 
-        "PriorityScore": raw["Priority_Score"],
+        "PriorityScore":
+            raw["Priority_Score"],
 
-        "PriorityLevel": raw["Priority_Tier"],
+        "PriorityLevel":
+            raw["Priority_Tier"],
 
         "HistoricalNightFloor":
-            raw["Historical_Night_Floor_m3"],
+            historical_night_floor,
 
         "RecentNightFloor":
-            raw["Recent_Night_Floor_m3"],
+            recent_night_floor,
 
         "NightTroughRatio":
             raw["Night_Trough_Ratio"],
@@ -51,8 +101,9 @@ def run_customer_detection(customer_id, category, consumption_df):
         "MK_SenSlope":
             raw["MK_Sen_Slope"],
 
-        # Your detector currently doesn't calculate this
-        "PeakZScore": None,
+        # Future enhancement
+        "PeakZScore":
+            None,
 
         "Evidence":
             raw["Priority_Reasons"],
@@ -60,21 +111,30 @@ def run_customer_detection(customer_id, category, consumption_df):
         "DataCompleteness":
             raw["Data_Completeness_Recent"],
 
-        # Not yet implemented
-        "EstimatedWaterLoss": None,
+        # ---------------------------------------------------------------------
+        # Newly Implemented Business Metrics
+        # ---------------------------------------------------------------------
 
-        "EstimatedRevenueLoss": None,
+        "EstimatedWaterLoss":
+            estimated_water_loss,
+
+        "EstimatedRevenueLoss":
+            estimated_revenue_loss,
 
         "Recommendation":
             raw["Details"],
 
-        # Could later be generated with GPT
+        # Future enhancement
         "AISummary":
             raw["Details"],
 
-        "FirstDetected": None,
+        # FirstDetected will be preserved by run_detection.py
+        "FirstDetected":
+            None,
 
-        "LastDetected": None,
+        # Updated every pipeline execution
+        "LastDetected":
+            current_timestamp,
     }
 
     return result
