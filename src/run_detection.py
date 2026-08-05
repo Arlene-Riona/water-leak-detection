@@ -116,6 +116,8 @@ def save_detection_result(connection, result):
             DataCompleteness,
             EstimatedWaterLoss,
             EstimatedRevenueLoss,
+            EstimationMethod,
+            AppliedTariff,
             Recommendation,
             AISummary,
             FirstDetected,
@@ -125,7 +127,7 @@ def save_detection_result(connection, result):
 
         VALUES (
 
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 
         )
         """,
@@ -145,6 +147,8 @@ def save_detection_result(connection, result):
             result["DataCompleteness"],
             result["EstimatedWaterLoss"],
             result["EstimatedRevenueLoss"],
+            result["EstimationMethod"],
+            result["AppliedTariff"],
             result["Recommendation"],
             result["AISummary"],
             first_detected,
@@ -178,13 +182,15 @@ def save_detection_history(connection, run_id, result):
             Evidence,
             EstimatedWaterLoss,
             EstimatedRevenueLoss,
+            EstimationMethod,
+            AppliedTariff,
             Recommendation
 
         )
 
         VALUES (
 
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 
         )
         """,
@@ -203,6 +209,8 @@ def save_detection_history(connection, run_id, result):
             result["Evidence"],
             result["EstimatedWaterLoss"],
             result["EstimatedRevenueLoss"],
+            result["EstimationMethod"],
+            result["AppliedTariff"],
             result["Recommendation"],
         ),
     )

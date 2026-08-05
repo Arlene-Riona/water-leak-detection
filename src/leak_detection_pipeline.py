@@ -467,10 +467,31 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
         # compare a customer against their category peers -- self-comparison stays
         # the primary decision-maker; this is only ever a confidence MODIFIER
         # applied afterward, never a leak-detection signal on its own.
-        recent_avg_consumption = df.loc[recent_mask, consumption_col].mean()
-        baseline_avg_consumption = baseline_data[consumption_col].mean()
-        if pd.notna(baseline_avg_consumption) and baseline_avg_consumption > 0.001 and pd.notna(recent_avg_consumption):
-            recent_vs_baseline_pct_change = (recent_avg_consumption - baseline_avg_consumption) / baseline_avg_consumption
+        # Historical daily consumption
+        historical_daily = (
+            baseline_data
+            .groupby(baseline_data[time_col].dt.floor("D"))[consumption_col]
+            .sum()
+        )
+
+        # Recent daily consumption
+        recent_daily = (
+            df.loc[recent_mask]
+            .groupby(df.loc[recent_mask, time_col].dt.floor("D"))[consumption_col]
+            .sum()
+        )
+
+        baseline_daily_median = historical_daily.median()
+        recent_daily_median = recent_daily.median()
+
+        if (
+            pd.notna(baseline_daily_median)
+            and baseline_daily_median > 0
+            and pd.notna(recent_daily_median)
+        ):
+            recent_vs_baseline_pct_change = (
+                recent_daily_median - baseline_daily_median
+            ) / baseline_daily_median
         else:
             recent_vs_baseline_pct_change = None
 
@@ -783,6 +804,15 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             "Recent_Vs_Baseline_Pct_Change": round(recent_vs_baseline_pct_change, 4) if recent_vs_baseline_pct_change is not None else None,
             "Historical_Night_Floor_m3": round(historical_min_flow, 4) if pd.notna(historical_min_flow) else None,
             "Recent_Night_Floor_m3": round(highest_observed_floor, 4) if pd.notna(highest_observed_floor) else None,
+            "Historical_Daily_Median_Consumption_m3":
+                round(baseline_daily_median, 4)
+                if pd.notna(baseline_daily_median)
+                else None,
+
+            "Recent_Daily_Median_Consumption_m3":
+                round(recent_daily_median, 4)
+                if pd.notna(recent_daily_median)
+                else None,
             "MNF_Applicable": mnf_applicable,
             "Trough_Detection_Method": trough_method,
             "Night_Trough_Ratio": round(night_trough_ratio, 3) if pd.notna(night_trough_ratio) else None,
@@ -810,6 +840,8 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             "Details": f"Execution Engine Failure: {str(e)}",
             "Historical_Night_Floor_m3": 0,
             "Recent_Night_Floor_m3": None,
+            "Historical_Daily_Median_Consumption_m3": None,
+            "Recent_Daily_Median_Consumption_m3": None,
             "MNF_Applicable": None,
             "Trough_Detection_Method": None,
             "Night_Trough_Ratio": None,
@@ -988,6 +1020,8 @@ def run_portfolio_leak_audit(base_folder="customers", time_col='Hourly', consump
                     "Details": f"Unhandled crawler-level failure: {str(e)}",
                     "Historical_Night_Floor_m3": 0,
                     "Recent_Night_Floor_m3": None,
+                    "Historical_Daily_Median_Consumption_m3": None,
+                    "Recent_Daily_Median_Consumption_m3": None,
                     "MNF_Applicable": None,
                     "Trough_Detection_Method": None,
                     "Night_Trough_Ratio": None,

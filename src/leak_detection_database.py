@@ -19,7 +19,16 @@ from leak_detection_pipeline import analyze_leak_production_grade
 
 # Placeholder tariff for the proof-of-concept.
 # Replace with the official Kahramaa tariff if available.
-WATER_TARIFF_QAR_PER_M3 = 4.5
+WATER_TARIFFS = {
+    "Residential": 4.4,
+    "Villa": 4.4,
+    "Flat": 4.4,
+    "Commercial": 5.2,
+    "Hotel": 5.2,
+    "Industrial": 4.4,
+    "Government": 7.0,
+    "Productive Farm": 5.2,
+}
 
 
 # =============================================================================
@@ -46,25 +55,84 @@ def run_customer_detection(customer_id, category, consumption_df):
     historical_night_floor = raw["Historical_Night_Floor_m3"]
     recent_night_floor = raw["Recent_Night_Floor_m3"]
 
-    if (
-        historical_night_floor is not None
-        and recent_night_floor is not None
+    historical_daily = raw["Historical_Daily_Median_Consumption_m3"]
+    recent_daily = raw["Recent_Daily_Median_Consumption_m3"]
+
+    # -------------------------------------------------------------------------
+    # Determine applicable water tariff
+    # -------------------------------------------------------------------------
+
+    if "Government" in category:
+        tariff = 7.0
+
+    elif "Industrial" in category:
+        tariff = 4.4
+
+    elif (
+        "Commercial" in category
+        or "Hotel" in category
+        or "Farm" in category
     ):
+        tariff = 5.2
 
-        estimated_water_loss = max(
-            0,
-            recent_night_floor - historical_night_floor
-        ) * 24
-
-        estimated_revenue_loss = (
-            estimated_water_loss *
-            WATER_TARIFF_QAR_PER_M3
-        )
+    elif (
+        "Residential" in category
+        or "Villa" in category
+        or "Flat" in category
+    ):
+        tariff = 4.4
 
     else:
+        tariff = 4.4
 
-        estimated_water_loss = None
-        estimated_revenue_loss = None
+    # -------------------------------------------------------------------------
+    # Business Impact Estimation
+    # -------------------------------------------------------------------------
+
+    estimated_water_loss = None
+    estimated_revenue_loss = None
+    estimation_method = None
+
+    # Consumption Baseline Estimate
+    #
+    # Used only when Minimum Night Flow cannot be evaluated.
+    # Assumes any sustained increase in median daily consumption
+    # represents potential leakage.
+
+    if raw["Leak_Suspected"] == "YES":
+
+        # Method 1 - Minimum Night Flow
+        if (
+            historical_night_floor is not None
+            and recent_night_floor is not None
+        ):
+
+            estimated_water_loss = max(
+                0,
+                recent_night_floor - historical_night_floor
+            ) * 24
+
+            estimation_method = "Minimum Night Flow"
+
+        # Method 2 - Consumption Baseline Estimate
+        elif (
+            historical_daily is not None
+            and recent_daily is not None
+        ):
+
+            estimated_water_loss = max(
+                0,
+                recent_daily - historical_daily
+            )
+
+            estimation_method = "Consumption Baseline Estimate"
+
+        # Revenue loss
+        if estimated_water_loss is not None:
+
+            estimated_revenue_loss = (
+                estimated_water_loss * tariff
+            )
 
     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -120,6 +188,12 @@ def run_customer_detection(customer_id, category, consumption_df):
 
         "EstimatedRevenueLoss":
             estimated_revenue_loss,
+
+        "EstimationMethod":
+            estimation_method,
+
+        "AppliedTariff":
+            tariff,
 
         "Recommendation":
             raw["Details"],
