@@ -686,6 +686,12 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             window_rows = df[df[time_col].isin(hit_times)]
             max_z = window_rows['z_score'].max()
             peak_volume = window_rows[consumption_col].max()
+            # Estimated burst water loss (m3)
+            baseline_during_burst = window_rows["baseline_median"].fillna(0)
+
+            burst_excess_volume = (
+                window_rows[consumption_col] - baseline_during_burst
+            ).clip(lower=0).sum()
             leak_reasons.append({
                 "text": (
                     f"Sudden Pipe Burst: Sustained, uncharacteristic high volume event for "
@@ -695,6 +701,7 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             })
 
         cumulative_burst_max_excess = None
+        burst_excess_volume = None
         if not strict_burst_fired:
             # --- Option 7: CUMULATIVE / FLUCTUATING BURST DETECTION (retuned) ---
             # A burst that fluctuates (e.g. pressure variation causing it to dip below

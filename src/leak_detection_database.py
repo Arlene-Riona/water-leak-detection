@@ -41,7 +41,6 @@ def run_customer_detection(customer_id, category, consumption_df):
         consumption_df=consumption_df,
         folder_type=category
     )
-
     # -------------------------------------------------------------------------
     # Estimated Daily Water Loss
     #
@@ -102,10 +101,7 @@ def run_customer_detection(customer_id, category, consumption_df):
     if raw["Leak_Suspected"] == "YES":
 
         # Method 1 - Minimum Night Flow
-        if (
-            historical_night_floor is not None
-            and recent_night_floor is not None
-        ):
+        if historical_night_floor is not None and recent_night_floor is not None:
 
             estimated_water_loss = max(
                 0,
@@ -114,7 +110,14 @@ def run_customer_detection(customer_id, category, consumption_df):
 
             estimation_method = "Minimum Night Flow"
 
-        # Method 2 - Consumption Baseline Estimate
+        # Method 2 - Burst Excess Volume
+        elif raw["Cumulative_Burst_Max_Excess_m3"] is not None:
+
+            estimated_water_loss = raw["Cumulative_Burst_Max_Excess_m3"]
+
+            estimation_method = "Burst Excess Volume"
+
+        # Method 3 - Consumption Baseline Estimate
         elif (
             historical_daily is not None
             and recent_daily is not None
@@ -127,12 +130,10 @@ def run_customer_detection(customer_id, category, consumption_df):
 
             estimation_method = "Consumption Baseline Estimate"
 
-        # Revenue loss
+        # Revenue loss (AFTER the final water loss is known)
         if estimated_water_loss is not None:
 
-            estimated_revenue_loss = (
-                estimated_water_loss * tariff
-            )
+            estimated_revenue_loss = estimated_water_loss * tariff
 
     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
