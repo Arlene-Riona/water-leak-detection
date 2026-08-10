@@ -108,6 +108,7 @@ def save_detection_result(connection, result):
             PriorityLevel,
             HistoricalNightFloor,
             RecentNightFloor,
+            RecentVsBaselinePctChange,
             NightTroughRatio,
             MK_PValue,
             MK_SenSlope,
@@ -127,7 +128,7 @@ def save_detection_result(connection, result):
 
         VALUES (
 
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 
         )
         """,
@@ -139,6 +140,7 @@ def save_detection_result(connection, result):
             result["PriorityLevel"],
             result["HistoricalNightFloor"],
             result["RecentNightFloor"],
+            result["Recent_Vs_Baseline_Pct_Change"],
             result["NightTroughRatio"],
             result["MK_PValue"],
             result["MK_SenSlope"],
@@ -175,6 +177,7 @@ def save_detection_history(connection, run_id, result):
             PriorityScore,
             HistoricalNightFloor,
             RecentNightFloor,
+            RecentVsBaselinePctChange,
             NightTroughRatio,
             MK_PValue,
             MK_SenSlope,
@@ -190,7 +193,7 @@ def save_detection_history(connection, run_id, result):
 
         VALUES (
 
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 
         )
         """,
@@ -202,6 +205,7 @@ def save_detection_history(connection, run_id, result):
             result["PriorityScore"],
             result["HistoricalNightFloor"],
             result["RecentNightFloor"],
+            result["Recent_Vs_Baseline_Pct_Change"],
             result["NightTroughRatio"],
             result["MK_PValue"],
             result["MK_SenSlope"],

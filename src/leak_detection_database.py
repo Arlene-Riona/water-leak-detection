@@ -161,6 +161,9 @@ def run_customer_detection(customer_id, category, consumption_df):
         "RecentNightFloor":
             recent_night_floor,
 
+        "Recent_Vs_Baseline_Pct_Change":
+            raw["Recent_Vs_Baseline_Pct_Change"],
+
         "NightTroughRatio":
             raw["Night_Trough_Ratio"],
 
@@ -210,6 +213,7 @@ def run_customer_detection(customer_id, category, consumption_df):
         # Updated every pipeline execution
         "LastDetected":
             current_timestamp,
+
     }
 
     return result
