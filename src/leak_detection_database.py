@@ -214,6 +214,9 @@ def run_customer_detection(customer_id, category, consumption_df):
         "LastDetected":
             current_timestamp,
 
+        "TimelineData":
+            raw.get("TimelineData", []),
+
     }
 
     return result

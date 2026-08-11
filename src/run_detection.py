@@ -158,6 +158,60 @@ def save_detection_result(connection, result):
         ),
     )
 
+def save_detection_timeline(connection, result):
+    """
+    Save the hourly investigation timeline for one customer.
+    """
+
+    cursor = connection.cursor()
+
+    timeline = result.get("TimelineData", [])
+
+    if not timeline:
+        return
+
+    # Replace the previous timeline for this customer
+    cursor.execute(
+        """
+        DELETE FROM DetectionTimeline
+        WHERE KM_Number = ?
+        """,
+        (result["KM_Number"],)
+    )
+
+    for row in timeline:
+
+        cursor.execute(
+            """
+            INSERT INTO DetectionTimeline (
+
+                KM_Number,
+                Timestamp,
+                Period,
+                ConsumptionM3,
+                BaselineM3,
+                DeviationM3,
+                ZScore,
+                IsAnomaly,
+                IsLeakSignal
+
+            )
+
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                result["KM_Number"],
+                row["Timestamp"],
+                row["Period"],
+                row["ConsumptionM3"],
+                row["BaselineM3"],
+                row["DeviationM3"],
+                row["ZScore"],
+                row["IsAnomaly"],
+                row["IsLeakSignal"],
+            )
+        )
+
 # =============================================================================
 # SAVE CURRENT HISTORY
 # =============================================================================
@@ -300,6 +354,11 @@ def main():
             save_detection_history(
                 connection,
                 run_id,
+                result
+            )
+
+            save_detection_timeline(
+                connection,
                 result
             )
 

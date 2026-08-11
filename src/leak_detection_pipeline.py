@@ -451,6 +451,10 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
         # --- 8. CORE LEAK EVALUATION ---
         leak_detected = False
         leak_reasons = []
+
+        # Investigation chart signal
+        df["is_leak_signal"] = False
+
         NIGHT_TROUGH_RATIO_THRESHOLD = 0.55
 
         def _trough_ratio(hist_min_flow, all_hours_median):
@@ -558,6 +562,12 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
 
             if highest_observed_floor > elevated_threshold and highest_observed_floor > 0.02:
                 leak_detected = True
+                df.loc[
+                    (df["period"] == "Recent_Evaluation") &
+                    (df["hour"].isin(night_hours)) &
+                    (df[consumption_col] > elevated_threshold),
+                    "is_leak_signal"
+                ] = True
                 leak_reasons.append({
                     "text": (
                         f"Slow Constant Leak: Night minimum floor structurally rose from "
@@ -582,6 +592,12 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
                 INTERMITTENCY_RATIO_THRESHOLD = 0.6
                 if intermittency_ratio >= INTERMITTENCY_RATIO_THRESHOLD:
                     leak_detected = True
+                    df.loc[
+                        (df["period"] == "Recent_Evaluation") &
+                        (df["hour"].isin(night_hours)) &
+                        (df[consumption_col] > elevated_threshold),
+                        "is_leak_signal"
+                    ] = True
                     leak_reasons.append({
                         "text": (
                             f"Intermittent Slow Leak: elevated minimum night flow on {nights_elevated} of "
@@ -650,6 +666,10 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
                             and total_projected_increase > night_drift_abs_floor):
                         leak_detected = True
                         mk_points = 35 if mk_result["p_one_sided"] < 0.01 else 25
+                        df.loc[
+                            df["period"] == "Recent_Evaluation",
+                            "is_leak_signal"
+                        ] = True
                         leak_reasons.append({
                             "text": (
                                 f"Slow Trend Leak (Mann-Kendall): statistically significant upward drift "
@@ -682,6 +702,10 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
         strict_burst_fired = (consecutive_sum >= consecutive_hours).any()
         if strict_burst_fired:
             leak_detected = True
+            df.loc[
+                df["is_anomaly"] == True,
+                "is_leak_signal"
+            ] = True
             hit_times = consecutive_sum[consecutive_sum >= consecutive_hours].index
             window_rows = df[df[time_col].isin(hit_times)]
             max_z = window_rows['z_score'].max()
@@ -720,7 +744,16 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             cumulative_excess_threshold = burst_vol_threshold * 4.0
             MIN_OCCURRENCE_DAYS = 3
 
-            is_soft_anomaly = (df['period'] == 'Recent_Evaluation') & (df['z_score'] > soft_z_threshold)
+            is_soft_anomaly = (
+                (df['period'] == 'Recent_Evaluation') &
+                (df['z_score'] > soft_z_threshold)
+            )
+
+            df.loc[
+                is_soft_anomaly &
+                (df['abs_deviation'] > 0),
+                "is_leak_signal"
+            ] = True
             excess_series = df['abs_deviation'].where(is_soft_anomaly & (df['abs_deviation'] > 0), 0.0)
             excess_series = excess_series.fillna(0.0)
             excess_indexed = pd.Series(excess_series.values, index=df[time_col])
@@ -737,6 +770,11 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
 
                 if days_with_exceedance >= MIN_OCCURRENCE_DAYS:
                     leak_detected = True
+                    df.loc[
+                        is_soft_anomaly &
+                        (df["abs_deviation"] > 0),
+                        "is_leak_signal"
+                    ] = True
                     leak_reasons.append({
                         "text": (
                             f"Intermittent/Fluctuating Burst: cumulative excess volume exceeded "
@@ -799,6 +837,57 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
         detail_parts = [r["text"] for r in leak_reasons] if leak_reasons else ["Normal consumer operational patterns detected."]
         detail_parts = detail_parts + info_notes  # advisory notes shown regardless of verdict
 
+        # -------------------------------------------------------------------------
+        # INVESTIGATION TIMELINE DATA
+        # -------------------------------------------------------------------------
+
+        timeline_df = df[
+            df["period"].isin([
+                "Historical_Baseline",
+                "Recent_Evaluation"
+            ])
+        ].copy()
+
+        timeline_df = timeline_df[
+            [
+                time_col,
+                "period",
+                consumption_col,
+                "baseline_median",
+                "abs_deviation",
+                "z_score",
+                "is_anomaly",
+                "is_leak_signal"
+            ]
+        ].copy()
+
+        timeline_df = timeline_df.rename(columns={
+            time_col: "Timestamp",
+            "period": "Period",
+            consumption_col: "ConsumptionM3",
+            "baseline_median": "BaselineM3",
+            "abs_deviation": "DeviationM3",
+            "z_score": "ZScore",
+            "is_anomaly": "IsAnomaly",
+            "is_leak_signal": "IsLeakSignal"
+        })
+
+        timeline_df["Timestamp"] = timeline_df["Timestamp"].dt.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        timeline_df["IsAnomaly"] = (
+            timeline_df["IsAnomaly"]
+            .fillna(False)
+            .astype(int)
+        )
+
+        timeline_df["IsLeakSignal"] = (
+            timeline_df["IsLeakSignal"]
+            .fillna(False)
+            .astype(int)
+        )
+
         return {
             "Status": "SUCCESS",
             "Leak_Suspected": "YES" if leak_detected else "NO",
@@ -832,6 +921,7 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             "Cumulative_Burst_Max_Excess_m3": cumulative_burst_max_excess,
             "Data_Completeness_Recent": data_completeness_recent,
             "Data_Completeness_Night": data_completeness_night,
+            "TimelineData": timeline_df.to_dict("records"),
         }
 
     except Exception as e:
