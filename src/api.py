@@ -33,7 +33,6 @@ app.mount(
 # ============================================================================
 
 class TechnicianFeedback(BaseModel):
-    DetectionID: int
     KM_Number: str
     Validation: str
     RootCause: str
@@ -58,17 +57,12 @@ def health_check():
         "status": "healthy"
     }
 
-
 @app.get("/technician-feedback")
-def technician_feedback_page():
+def technician_feedback_form():
     return FileResponse(
         WEB_DIR / "technician_feedback.html"
     )
 
-
-# ============================================================================
-# TECHNICIAN FEEDBACK
-# ============================================================================
 
 @app.post("/technician-feedback")
 def submit_technician_feedback(feedback: TechnicianFeedback):
@@ -77,6 +71,34 @@ def submit_technician_feedback(feedback: TechnicianFeedback):
 
     try:
         cursor = connection.cursor()
+
+        # ------------------------------------------------------------
+        # TEMPORARY PoC WORKAROUND
+        # Use an existing DetectionID so the database foreign-key
+        # requirement is satisfied.
+        # ------------------------------------------------------------
+
+        cursor.execute(
+            """
+            SELECT DetectionID
+            FROM DetectionHistory
+            LIMIT 1
+            """
+        )
+
+        detection_row = cursor.fetchone()
+
+        if detection_row is None:
+            raise HTTPException(
+                status_code=500,
+                detail="No DetectionID exists in DetectionHistory."
+            )
+
+        dummy_detection_id = detection_row["DetectionID"]
+
+        # ------------------------------------------------------------
+        # SAVE TECHNICIAN FEEDBACK
+        # ------------------------------------------------------------
 
         cursor.execute(
             """
@@ -91,7 +113,7 @@ def submit_technician_feedback(feedback: TechnicianFeedback):
             VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """,
             (
-                feedback.DetectionID,
+                dummy_detection_id,
                 feedback.KM_Number,
                 feedback.Validation,
                 feedback.RootCause,
@@ -108,6 +130,10 @@ def submit_technician_feedback(feedback: TechnicianFeedback):
             "message": "Technician feedback recorded successfully.",
             "FeedbackID": feedback_id
         }
+
+    except HTTPException:
+        connection.rollback()
+        raise
 
     except Exception as e:
 
