@@ -699,6 +699,9 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
         window_str = f"{consecutive_hours}h"
         consecutive_sum = anomaly_series.rolling(window_str, min_periods=consecutive_hours).sum()
 
+        cumulative_burst_max_excess = None
+        burst_excess_volume = None
+
         strict_burst_fired = (consecutive_sum >= consecutive_hours).any()
         if strict_burst_fired:
             leak_detected = True
@@ -706,16 +709,65 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
                 df["is_anomaly"] == True,
                 "is_leak_signal"
             ] = True
-            hit_times = consecutive_sum[consecutive_sum >= consecutive_hours].index
-            window_rows = df[df[time_col].isin(hit_times)]
-            max_z = window_rows['z_score'].max()
+            hit_times = consecutive_sum[
+                consecutive_sum >= consecutive_hours
+            ].index
+
+            # Each hit_time is the END of a valid consecutive burst window.
+            # Recover the full consecutive window rather than only selecting
+            # the endpoint hour.
+            burst_windows = []
+
+            for end_time in hit_times:
+
+                start_time = end_time - pd.Timedelta(
+                    hours=consecutive_hours - 1
+                )
+
+                burst_window = df[
+                    (df[time_col] >= start_time) &
+                    (df[time_col] <= end_time)
+                ].copy()
+
+                burst_windows.append(burst_window)
+
+            # Combine all detected burst windows and remove duplicate hours
+            # caused by overlapping rolling windows.
+            if burst_windows:
+
+                window_rows = (
+                    pd.concat(burst_windows)
+                    .drop_duplicates(subset=[time_col])
+                    .sort_values(time_col)
+                )
+
+            else:
+
+                window_rows = df.iloc[0:0].copy()
+
+            max_z = window_rows["z_score"].max()
             peak_volume = window_rows[consumption_col].max()
-            # Estimated burst water loss (m3)
-            baseline_during_burst = window_rows["baseline_median"].fillna(0)
+
+            # -------------------------------------------------------------------------
+            # Estimated burst water loss
+            #
+            # Actual consumption above the expected baseline during the
+            # detected burst window.
+            # -------------------------------------------------------------------------
+
+            valid_baseline = window_rows["baseline_median"].notna()
 
             burst_excess_volume = (
-                window_rows[consumption_col] - baseline_during_burst
+                window_rows.loc[valid_baseline, consumption_col]
+                - window_rows.loc[valid_baseline, "baseline_median"]
             ).clip(lower=0).sum()
+
+            burst_excess_volume = round(
+                float(burst_excess_volume),
+                4
+            )
+
+           
             leak_reasons.append({
                 "text": (
                     f"Sudden Pipe Burst: Sustained, uncharacteristic high volume event for "
@@ -724,8 +776,6 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
                 "points": 40,
             })
 
-        cumulative_burst_max_excess = None
-        burst_excess_volume = None
         if not strict_burst_fired:
             # --- Option 7: CUMULATIVE / FLUCTUATING BURST DETECTION (retuned) ---
             # A burst that fluctuates (e.g. pressure variation causing it to dip below
@@ -918,7 +968,9 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             "MK_Evaluated": mk_evaluated,
             "MK_P_Value": mk_p_value,
             "MK_Sen_Slope": mk_sen_slope,
-            "Cumulative_Burst_Max_Excess_m3": cumulative_burst_max_excess,
+            "Cumulative_Burst_Max_Excess_m3": burst_excess_volume
+                if burst_excess_volume is not None
+                else cumulative_burst_max_excess,
             "Data_Completeness_Recent": data_completeness_recent,
             "Data_Completeness_Night": data_completeness_night,
             "TimelineData": timeline_df.to_dict("records"),
