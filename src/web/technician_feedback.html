@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Technician Feedback</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #FAFAFA;
+            color: #22384F;
+        }
+
+        .header {
+            background: #005F93;
+            color: white;
+            padding: 22px 32px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .header p {
+            margin: 6px 0 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: #FFFFFF;
+            border: 1px solid #EAE9EC;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #22384F;
+            margin-bottom: 20px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 28px;
+        }
+
+        .info-box {
+            background: #D2E9FF;
+            border-radius: 7px;
+            padding: 14px;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #3F5B79;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #005F93;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #22384F;
+            margin-bottom: 7px;
+        }
+
+        select,
+        textarea {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid #EAE9EC;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #22384F;
+            background: white;
+        }
+
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #005F93;
+        }
+
+        textarea {
+            min-height: 110px;
+            resize: vertical;
+        }
+
+        .submit-button {
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 6px;
+            background: #005F93;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .header-content {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .logo {
+            height: 110px;
+            width: auto;
+            object-fit: contain;
+        }
+
+        .submit-button:hover {
+            background: #0A74BC;
+        }
+
+        .submit-button:disabled {
+            background: #9CA0A4;
+            cursor: not-allowed;
+        }
+
+        .message {
+            margin-top: 18px;
+            padding: 12px;
+            border-radius: 6px;
+            display: none;
+            font-size: 14px;
+        }
+
+        .success {
+            background: #ABDEAB;
+            color: #22384F;
+        }
+
+        .error {
+            background: #F5817D;
+            color: #22384F;
+        }
+
+        .required {
+            color: #7A142F;
+        }
+
+        @media (max-width: 600px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                padding: 22px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+
+    <img
+            src="/web/kahramaa_logo.png"
+            alt="Kahramaa"
+            class="logo"
+        >
+
+    <h1>Technician Feedback</h1>
+    <p>Record the outcome of the leak investigation</p>
+
+
+</div>
+
+<div class="container">
+
+    <div class="card">
+
+        <div class="section-title">
+            Detection Information
+        </div>
+
+        <div class="info-grid">
+
+            <div class="info-box">
+                <div class="info-label">KM Number</div>
+                <div class="info-value" id="kmNumber">
+                    Loading...
+                </div>
+            </div>
+
+        </div>
+
+
+        <div class="section-title">
+            Investigation Result
+        </div>
+
+
+        <form id="feedbackForm">
+
+            <div class="form-group">
+
+                <label for="validation">
+                    Validation <span class="required">*</span>
+                </label>
+
+                <select id="validation" required>
+
+                    <option value="">
+                        Select validation result
+                    </option>
+
+                    <option value="Confirmed Leak">
+                        Confirmed Leak
+                    </option>
+
+                    <option value="False Alarm">
+                        False Alarm
+                    </option>
+
+                    <option value="Unable to Verify">
+                        Unable to Verify
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="rootCause">
+                    Root Cause <span class="required">*</span>
+                </label>
+
+                <select id="rootCause" required>
+
+                    <option value="">
+                        Select root cause
+                    </option>
+
+                    <option value="Pipe Failure">
+                        Pipe Failure
+                    </option>
+
+                    <option value="Valve Failure">
+                        Valve Failure
+                    </option>
+
+                    <option value="Meter Issue">
+                        Meter Issue
+                    </option>
+
+                    <option value="Customer-Side Leak">
+                        Customer-Side Leak
+                    </option>
+
+                    <option value="Unknown">
+                        Unknown
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="notes">
+                    Notes
+                </label>
+
+                <textarea
+                    id="notes"
+                    placeholder="Enter any relevant observations..."
+                ></textarea>
+
+            </div>
+
+
+            <button
+                type="submit"
+                class="submit-button"
+                id="submitButton"
+            >
+                Submit Feedback
+            </button>
+
+        </form>
+
+
+        <div id="message" class="message"></div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+    // ============================================================
+    // READ DETECTION INFORMATION FROM URL
+    // ============================================================
+
+    const params = new URLSearchParams(window.location.search);
+
+    const kmNumber = params.get("km");
+
+
+    document.getElementById("kmNumber").textContent =
+        kmNumber || "Not provided";
+
+
+    // ============================================================
+    // FORM SUBMISSION
+    // ============================================================
+
+    const form = document.getElementById("feedbackForm");
+
+    const submitButton = document.getElementById("submitButton");
+
+    const message = document.getElementById("message");
+
+
+    form.addEventListener("submit", async function(event) {
+
+        event.preventDefault();
+
+
+        // Make sure the URL contains the required detection information
+
+        if (!kmNumber) {
+
+            showMessage(
+                "Missing Detection ID or KM Number.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        const validation =
+            document.getElementById("validation").value;
+
+        const rootCause =
+            document.getElementById("rootCause").value;
+
+        const notes =
+            document.getElementById("notes").value;
+
+
+        submitButton.disabled = true;
+
+        submitButton.textContent = "Submitting...";
+
+
+        try {
+
+            const response = await fetch(
+                "/technician-feedback",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        DetectionID: parseInt(detectionId),
+
+                        KM_Number: kmNumber,
+
+                        Validation: validation,
+
+                        RootCause: rootCause,
+
+                        Notes: notes || null
+
+                    })
+                }
+            );
+
+
+            const result = await response.json();
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    result.detail || "Failed to submit feedback."
+                );
+
+            }
+
+
+            showMessage(
+                "Technician feedback recorded successfully.",
+                "success"
+            );
+
+
+            form.reset();
+
+
+            submitButton.textContent = "Submitted";
+
+
+        } catch (error) {
+
+            showMessage(
+                error.message,
+                "error"
+            );
+
+            submitButton.disabled = false;
+
+            submitButton.textContent = "Submit Feedback";
+
+        }
+
+    });
+
+
+    // ============================================================
+    // MESSAGE DISPLAY
+    // ============================================================
+
+    function showMessage(text, type) {
+
+        message.textContent = text;
+
+        message.className =
+            "message " + type;
+
+        message.style.display = "block";
+
+    }
+
+</script>
+
+</body>
+</html>
