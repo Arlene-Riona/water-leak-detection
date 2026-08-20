@@ -129,6 +129,33 @@ persistence requirement was added after testing showed the original
 single-occurrence version produced false positives on genuinely clean data.
 See `06_Validation.md`.
 
+## Path D: Residential Consumption Profile Check (informational, not a detection path)
+
+Added after the database/dashboard layer was built (see
+`09_Database_and_Dashboard.md`) — this is a simpler, independent signal
+for Residential/Flat/Villa customers, **deliberately not wired into
+`Leak_Suspected` or `Priority_Score`**. It exists to give investigators
+extra context on the Investigation dashboard, not to trigger a flag on
+its own.
+
+```
+RESIDENTIAL_PROFILE_THRESHOLDS = {"Residential": 0.005, "Flat": 0.005, "Villa": 0.0075}  # m3/hour
+PROFILE_CHECK_DAYS = 5
+```
+
+For the last 5 complete calendar days, checks whether that day's minimum
+hourly consumption stayed above the category threshold. If true for all 5
+days, flags `Abnormal Consumption`; if the minimum dropped below
+threshold on at least one day, `Normal Consumption`; if fewer than 5
+complete days exist, `Insufficient Data`.
+
+This is conceptually adjacent to Minimum Night Flow (a household that
+never goes quiet), but uses a fixed absolute threshold rather than a
+comparison against that customer's own historical baseline, which is why
+it's kept as a separate, simpler signal rather than merged into Path A.
+Whether this should eventually feed into the leak verdict is an open
+question, not yet decided — see `09_Database_and_Dashboard.md`.
+
 ## Seasonal confound handling
 
 A rule-based (not learned) calendar lookup of known regional high-variance

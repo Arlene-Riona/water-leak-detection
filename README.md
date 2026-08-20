@@ -60,6 +60,13 @@ things measurably worse, and rejected — see
 [`docs/07_Design_Decisions.md`](docs/07_Design_Decisions.md) for the full,
 honest record of what worked, what didn't, and why.
 
+On top of the detection logic, a SQLite backend and a two-page Power BI
+dashboard have since been built: an Executive view for portfolio-level
+monitoring, and an Investigation view for technicians to drill into why a
+specific customer was flagged, including a per-hour timeline and a
+feedback loop for logging real investigation outcomes. See
+[`docs/09_Database_and_Dashboard.md`](docs/09_Database_and_Dashboard.md).
+
 ## What it does
 
 Given hourly `(timestamp, consumption)` readings per customer, organized by
@@ -80,6 +87,29 @@ the pipeline:
 5. Outputs a **priority score and tier** (not a calibrated risk
    probability) with a plain-language explanation of exactly why each
    customer was flagged.
+6. Stores results in a **SQLite backend** (latest state, full run history,
+   and per-hour investigation detail per customer) and surfaces them
+   through a **Power BI dashboard**: a portfolio-level Executive view and
+   a per-customer Investigation view for technicians, including a
+   feedback loop for logging real investigation outcomes. Full detail:
+   [`docs/09_Database_and_Dashboard.md`](docs/09_Database_and_Dashboard.md).
+
+## Dashboard
+
+**Executive Dashboard** — portfolio-level monitoring: active suspected
+leaks, estimated water loss and revenue at risk, priority distribution,
+a network leakage trend over time, and a category/zone breakdown.
+
+<!-- Add your sanitized Executive Dashboard screenshot here, e.g.:
+![Executive Dashboard](docs/images/executive_dashboard.png) -->
+
+**Investigation Dashboard** — per-customer drill-down for technicians:
+why a customer was flagged, supporting evidence, a full consumption
+timeline with the exact hours that drove the verdict, and a feedback form
+to log the real outcome once investigated.
+
+<!-- Add your sanitized Investigation Dashboard screenshot here, e.g.:
+![Investigation Dashboard](docs/images/investigation_dashboard.png) -->
 
 ## How well does it work
 
@@ -136,6 +166,12 @@ pytest tests/
 water-leak-detection/
 ├── docs/                  Full documentation (see below)
 ├── src/                   Core detection logic (importable module)
+│   ├── leak_detection_pipeline.py   Detection engine (file-based + DataFrame wrapper)
+│   ├── leak_detection_database.py   SQLite adapter + business impact estimation
+│   ├── run_detection.py             Pipeline orchestration script
+│   └── database.py                  SQLite connection helper (see note below)
+├── database/               Schema/setup scripts, gitignored .db file itself
+├── dashboard/               .pbix file + sanitized screenshots
 ├── notebooks/
 │   ├── leak_detection.ipynb    Main pipeline notebook
 │   ├── exploratory/             Early exploratory analysis (partial EDA)
@@ -149,7 +185,16 @@ water-leak-detection/
 └── .gitignore
 ```
 
+> **The `database/` and `dashboard/` folder layout above is a proposed
+> structure, not yet confirmed against where you actually put these
+> files.** `database.py` and `config.py` (which `database.py` imports
+> `DATABASE_PATH` from via a relative import — see
+> `09_Database_and_Dashboard.md` for a possible import-structure gotcha
+> this implies) haven't been fully reviewed yet — let me know the actual
+> layout and I'll correct this section to match.
+
 **Not included in this repository:** real customer data (`customers/`),
+the SQLite database file itself (contains real customer records),
 generated audit outputs, and any file containing customer names or
 identifiable information. See `.gitignore` and
 [`data/README.md`](data/README.md).
@@ -166,6 +211,7 @@ identifiable information. See `.gitignore` and
 | [`06_Validation.md`](docs/06_Validation.md) | All tested numbers — synthetic, BATADAL, BattLeDIM — and the real-data incident that shaped seasonal handling |
 | [`07_Design_Decisions.md`](docs/07_Design_Decisions.md) | Why MNF over ML, why Mann-Kendall over CUSUM, why peer comparison only boosts, and other tradeoffs |
 | [`08_Future_Work.md`](docs/08_Future_Work.md) | What's blocked on more data vs. what's just unbuilt architecture |
+| [`09_Database_and_Dashboard.md`](docs/09_Database_and_Dashboard.md) | SQLite schema, pipeline orchestration, and the Power BI dashboard layer |
 
 ## Current status and what's still needed
 
@@ -186,7 +232,7 @@ and what's genuinely still missing:
 
 | Needs more data (not more code) | Needs more engineering (buildable now, not yet built) |
 |---|---|
-| Validation against *your own* customers' confirmed outcomes | Extending the deep Ramadan-style fix to other seasonal confounds |
+| Validation against *your own* customers' confirmed outcomes — the mechanism now exists (`TechnicianFeedback` table, see `09_Database_and_Dashboard.md`), but needs real technician use before it produces validation data | Extending the deep Ramadan-style fix to other seasonal confounds |
 | Learned/calibrated thresholds (currently hand-set) | Routing the burst-detection paths through the same seasonal logic MNF already has |
 | A real calibrated risk probability, replacing the priority score | Hardening against messy real-world data (negative readings, DST transitions, duplicate meters, inconsistent units) |
 | A machine-learning fix for baseline contamination (proven genuinely hard — see `06_Validation.md`) | Changepoint detection as a more principled contamination approach (researched, not yet built) |
