@@ -24,6 +24,24 @@ _FIXED_YEAR_CONFOUND_PERIODS = [
     ("Ramadan/Eid al-Fitr 2027", "2027-02-04", "2027-03-14"),
 ]
 
+# =============================================================================
+# RESIDENTIAL CONSUMPTION PROFILE CHECK
+# =============================================================================
+
+# Screening thresholds for persistent minimum hourly consumption.
+# Values are in m3 per hour.
+#
+# This is separate from leak detection. It identifies residential customers
+# whose consumption fails to reach an expected low-consumption state over
+# multiple consecutive days.
+RESIDENTIAL_PROFILE_THRESHOLDS = {
+    "Residential": 0.005,   # 5 L/hour
+    "Flat": 0.005,          # 5 L/hour
+    "Villa": 0.0075,        # 7.5 L/hour
+}
+
+PROFILE_CHECK_DAYS = 5
+
 
 def _get_confound_periods(years):
     """
@@ -347,11 +365,131 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
                 "Cumulative_Burst_Max_Excess_m3": None,
                 "Data_Completeness_Recent": None,
                 "Data_Completeness_Night": None,
+                "Consumption_Profile_Status": None,
+                "Consumption_Profile_Reason": None,
+                "Consumption_Profile_Threshold_m3": None,
+                "Consumption_Profile_Days_Checked": None,
             }
 
         df['period'] = 'Ignore'
         df.loc[(df[time_col] >= eight_weeks_prior) & (df[time_col] < four_weeks_ago), 'period'] = 'Historical_Baseline'
         df.loc[df[time_col] >= four_weeks_ago, 'period'] = 'Recent_Evaluation'
+
+        # ---------------------------------------------------------------------
+        # RESIDENTIAL CONSUMPTION PROFILE CHECK
+        #
+        # Independent from leak detection.
+        #
+        # Checks whether Residential / Flat / Villa customers fail to reach an
+        # expected low-consumption state for 5 consecutive complete days.
+        # ---------------------------------------------------------------------
+
+        abnormal_consumption_status = "Not Applicable"
+        abnormal_consumption_reason = None
+        profile_threshold = None
+        profile_days_checked = 0
+
+        # Find the applicable threshold for this customer category.
+        for category_name, threshold in RESIDENTIAL_PROFILE_THRESHOLDS.items():
+
+            if category_name.lower() in folder_type.lower():
+                profile_threshold = threshold
+                break
+
+        if profile_threshold is not None:
+
+            # Work only with complete calendar days.
+            profile_df = df.copy()
+            profile_df["profile_date"] = profile_df[time_col].dt.floor("D")
+
+            # Identify the most recent timestamp in the data.
+            latest_timestamp = profile_df[time_col].max()
+            latest_date = latest_timestamp.floor("D")
+
+            # Check whether the latest calendar day is complete.
+            #
+            # A complete hourly day should contain all 24 hourly observations.
+            latest_day_rows = profile_df[
+                profile_df["profile_date"] == latest_date
+            ]
+
+            if latest_day_rows[time_col].nunique() < 24:
+
+                # Exclude the incomplete latest day.
+                profile_df = profile_df[
+                    profile_df["profile_date"] < latest_date
+                ]
+
+            # Calculate daily coverage first.
+            daily_coverage = (
+                profile_df
+                .groupby("profile_date")[time_col]
+                .nunique()
+            )
+
+            # Keep only complete days with all 24 hourly observations.
+            complete_dates = daily_coverage[
+                daily_coverage >= 24
+            ].index
+
+            complete_profile_df = profile_df[
+                profile_df["profile_date"].isin(complete_dates)
+            ]
+
+            # Calculate the minimum hourly consumption for each complete day.
+            daily_minimums = (
+                complete_profile_df
+                .groupby("profile_date")[consumption_col]
+                .min()
+                .sort_index()
+            )
+
+            # Select the latest 5 complete days.
+            recent_daily_minimums = daily_minimums.tail(
+                PROFILE_CHECK_DAYS
+            )
+
+            profile_days_checked = len(recent_daily_minimums)
+
+            if profile_days_checked < PROFILE_CHECK_DAYS:
+
+                abnormal_consumption_status = "Insufficient Data"
+
+                abnormal_consumption_reason = (
+                    f"Only {profile_days_checked} complete day(s) available; "
+                    f"{PROFILE_CHECK_DAYS} complete days are required for the "
+                    f"residential consumption profile check."
+                )
+
+            else:
+
+                # A day is elevated when even its LOWEST hourly consumption
+                # remains above the expected low-consumption threshold.
+                elevated_days = (
+                    recent_daily_minimums > profile_threshold
+                )
+
+                if elevated_days.all():
+
+                    abnormal_consumption_status = "Abnormal Consumption"
+
+                    abnormal_consumption_reason = (
+                        f"Minimum hourly consumption remained above "
+                        f"{profile_threshold:.4f} m3/hour for all "
+                        f"{PROFILE_CHECK_DAYS} consecutive complete days."
+                    )
+
+                else:
+
+                    abnormal_consumption_status = "Normal Consumption"
+
+                    normal_days = int((~elevated_days).sum())
+
+                    abnormal_consumption_reason = (
+                        f"Consumption reached the expected low-consumption "
+                        f"range on {normal_days} of the last "
+                        f"{PROFILE_CHECK_DAYS} complete days."
+                    )
 
         # --- SEASONAL / CALENDAR CONFOUND CHECK ---
         # A leak flag during a known high-variance calendar period (Ramadan/Eid,
@@ -974,6 +1112,10 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             "Data_Completeness_Recent": data_completeness_recent,
             "Data_Completeness_Night": data_completeness_night,
             "TimelineData": timeline_df.to_dict("records"),
+            "Consumption_Profile_Status": abnormal_consumption_status,
+            "Consumption_Profile_Reason": abnormal_consumption_reason,
+            "Consumption_Profile_Threshold_m3": profile_threshold,
+            "Consumption_Profile_Days_Checked": profile_days_checked,
         }
 
     except Exception as e:
@@ -1003,6 +1145,10 @@ def _analyze_leak_production_grade(file_path, folder_type, time_col='Hourly', co
             "Cumulative_Burst_Max_Excess_m3": None,
             "Data_Completeness_Recent": None,
             "Data_Completeness_Night": None,
+            "Consumption_Profile_Status": None,
+            "Consumption_Profile_Reason": None,
+            "Consumption_Profile_Threshold_m3": None,
+            "Consumption_Profile_Days_Checked": None
         }
 
 
@@ -1183,6 +1329,10 @@ def run_portfolio_leak_audit(base_folder="customers", time_col='Hourly', consump
                     "Cumulative_Burst_Max_Excess_m3": None,
                     "Data_Completeness_Recent": None,
                     "Data_Completeness_Night": None,
+                    "Consumption_Profile_Status": None,
+                    "Consumption_Profile_Reason": None,
+                    "Consumption_Profile_Threshold_m3": None,
+                    "Consumption_Profile_Days_Checked": None
                 }
 
             audit_summary["Filename"] = file

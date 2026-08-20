@@ -121,6 +121,10 @@ def save_detection_result(connection, result):
             AppliedTariff,
             Recommendation,
             AISummary,
+            ConsumptionProfileStatus,
+            ConsumptionProfileReason,
+            ConsumptionProfileThresholdM3,
+            ConsumptionProfileDaysChecked,
             FirstDetected,
             LastDetected
 
@@ -128,7 +132,7 @@ def save_detection_result(connection, result):
 
         VALUES (
 
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
 
         )
         """,
@@ -153,6 +157,10 @@ def save_detection_result(connection, result):
             result["AppliedTariff"],
             result["Recommendation"],
             result["AISummary"],
+            result["Consumption_Profile_Status"],
+            result["Consumption_Profile_Reason"],
+            result["Consumption_Profile_Threshold_m3"],
+            result["Consumption_Profile_Days_Checked"],
             first_detected,
             result["LastDetected"],
         ),

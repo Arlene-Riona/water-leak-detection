@@ -206,6 +206,22 @@ def run_customer_detection(customer_id, category, consumption_df):
         "AISummary":
             raw["Details"],
 
+        # ---------------------------------------------------------------------
+        # Residential Consumption Profile Check
+        # ---------------------------------------------------------------------
+
+        "Consumption_Profile_Status":
+            raw.get("Consumption_Profile_Status"),
+
+        "Consumption_Profile_Reason":
+            raw.get("Consumption_Profile_Reason"),
+
+        "Consumption_Profile_Threshold_m3":
+            raw.get("Consumption_Profile_Threshold_m3"),
+
+        "Consumption_Profile_Days_Checked":
+            raw.get("Consumption_Profile_Days_Checked"),
+
         # FirstDetected will be preserved by run_detection.py
         "FirstDetected":
             None,
