@@ -100,16 +100,22 @@ the pipeline:
 leaks, estimated water loss and revenue at risk, priority distribution,
 a network leakage trend over time, and a category/zone breakdown.
 
-<!-- Add your sanitized Executive Dashboard screenshot here, e.g.:
-![Executive Dashboard](docs/images/executive_dashboard.png) -->
+<img width="1046" height="583" alt="pg1" src="https://github.com/user-attachments/assets/872eb188-3bcd-4d73-ad84-66e4e962962f" />
+
+<img width="1046" height="582" alt="pg2" src="https://github.com/user-attachments/assets/31466ea9-7b92-4653-9b9d-7b66262f8ae9" />
+
 
 **Investigation Dashboard** — per-customer drill-down for technicians:
 why a customer was flagged, supporting evidence, a full consumption
 timeline with the exact hours that drove the verdict, and a feedback form
 to log the real outcome once investigated.
 
-<!-- Add your sanitized Investigation Dashboard screenshot here, e.g.:
-![Investigation Dashboard](docs/images/investigation_dashboard.png) -->
+<img width="1045" height="586" alt="pg3" src="https://github.com/user-attachments/assets/83632f24-de63-4b3c-878d-ab1f61db5359" />
+
+<img width="2464" height="1276" alt="pg44" src="https://github.com/user-attachments/assets/272fbe75-6d68-4b9d-b998-7f18da9f7887" />
+
+
+
 
 ## How well does it work
 
