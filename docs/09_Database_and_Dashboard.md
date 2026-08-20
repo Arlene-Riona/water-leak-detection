@@ -6,15 +6,87 @@ results, the pipeline script that runs detection against it, and the
 Power BI dashboard built on top. See `02_Algorithm_Design.md` for the
 detection logic itself, which this layer calls without modifying.
 
-> **Note:** this document was written from schema screenshots, two
-> pipeline scripts (`leak_detection_database.py`, `run_detection.py`),
-> and dashboard screenshots — not from direct access to the `.pbix` file
-> or the live database. Some specifics (exact DAX formulas behind
-> individual measures, the full list of dashboard interactions) are
-> described at the level of what's visible in the screenshots, not
-> verified line-by-line the way the Python logic was. Treat the DAX/measure
-> descriptions here as a starting map, not a guaranteed-accurate spec —
-> worth a pass to correct anything this got wrong.
+> **Sources:** this document was written from schema screenshots, three
+> pipeline/connection scripts (`leak_detection_database.py`,
+> `run_detection.py`, `database.py`), dashboard screenshots, and five
+> planning documents (`Design_Principles.docx`, `DataDictionaryV1.docx`,
+> `FinalTablesForDatabase.docx`, `FinalPowerBIDashboard.docx`,
+> `ERD.docx`) — not from direct access to the `.pbix` file or the live
+> database. Some specifics (exact DAX formulas behind individual
+> measures, whether every spec'd dashboard section actually made it into
+> the build) are described at the level of what's visible across these
+> sources, not verified end-to-end the way the Python logic was. See
+> "Spec vs. actual" below for the specific points still worth confirming.
+
+## Design principles
+
+These come from `Design_Principles.docx` and are treated as architecture,
+not just notes:
+
+1. **Raw data is never modified.** `HourlyConsumption` is immutable.
+2. **Algorithm output and business output are stored together** in
+   `DetectionResults`, but logically grouped (detection evidence vs.
+   business impact vs. tracking fields — see the column groupings in
+   `DataDictionaryV1.docx`).
+3. **Historical evidence is never overwritten.** This is why
+   `DetectionHistory` is append-only while `DetectionResults` is
+   overwrite-in-place — one table is "latest state," the other is
+   permanent record.
+4. **Every detection can eventually be validated by a technician** — the
+   entire reason `TechnicianFeedback` exists, and the mechanism that
+   finally closes the feedback-loop gap flagged repeatedly in
+   `06_Validation.md` and `08_Future_Work.md`.
+5. **Power BI never reads raw hourly data unless performing drill-down
+   analysis.** It primarily reads `DetectionResults` (and the
+   `vw_*` views built on top of it), which is what keeps the dashboards
+   fast — raw `HourlyConsumption` is only queried for the Investigation
+   dashboard's timeline chart, not for anything portfolio-level.
+6. **The database is designed for future ML.** The feedback loop already
+   exists (`TechnicianFeedback`) — once it has enough real, confirmed
+   outcomes in it, it becomes the labeled dataset that was flagged
+   throughout `07_Design_Decisions.md` and `08_Future_Work.md` as the
+   actual blocker for a learned/calibrated model, not a hypothetical one.
+
+## Spec vs. actual: discrepancies worth resolving
+
+This project has real planning documents behind it —
+`FinalTablesForDatabase.docx` (early draft), `DataDictionaryV1.docx`
+(formal, current spec), `FinalPowerBIDashboard.docx` (dashboard section-by-
+section spec), and `ERD.docx` (entity-relationship diagram). Comparing
+them against the actual schema and dashboard screenshots surfaced a few
+real gaps, not just naming differences:
+
+- **`LeakDurationDays`** was specified in the early draft
+  (`FinalTablesForDatabase.docx`) for `DetectionResults`, but isn't in
+  `DataDictionaryV1.docx` or the actual schema. Looks like it was
+  intentionally dropped somewhere between the two spec versions — worth
+  a quick confirmation it wasn't just lost by accident.
+- **An "Investigation History" table is specified** for the Investigation
+  dashboard (`FinalPowerBIDashboard.docx`, Section 7 — every previous
+  detection run for the selected customer, sourced directly from
+  `DetectionHistory`), but isn't visible in the Investigation dashboard
+  screenshot this document was written from. Given `DetectionHistory`
+  already exists specifically to support this, it's either just outside
+  the screenshot's crop or genuinely not built yet — worth checking
+  directly against the live `.pbix`.
+- **The Leak Evidence section is specced as a per-algorithm ✓/✗ checklist**
+  (Adaptive MNF, Mann-Kendall, Sen's Slope, Burst Detection, Night Trough
+  Ratio, Data Completeness, each shown individually) — the spec calls
+  this *"one of the strongest parts of the project"* for explainability.
+  What's actually built (the "Why was this customer flagged?" and
+  "Supporting Evidence" panels) is more narrative than checklist-style.
+  Not necessarily wrong, but worth confirming this was a deliberate design
+  choice rather than drift from the original explainability intent.
+- **Several Executive KPI cards from the spec** (Data Completeness %,
+  Customers Processed, Last Pipeline Run) **aren't confirmed** in the
+  Executive dashboard screenshot this document was written from — again,
+  this may just be outside the screenshot's crop rather than actually
+  missing.
+
+None of these are corrections to make blindly — they're specifically
+flagged as "worth checking against the real thing" rather than assumed
+gaps, since this document was written from partial screenshots and
+planning documents, not a live walkthrough of the actual `.pbix`.
 
 ## Why SQLite, and how it fits together
 
